@@ -87,3 +87,7 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 | `KICAD_MCP_ENABLE_SCH_EDIT` | `0` | `1` włącza edycję schematów |
 | `KICAD_MCP_LAUNCH_WAIT` | `45` | ile sekund czekać na IPC po `launch_kicad` |
 | `KICAD_API_SOCKET` | auto | jawna ścieżka gniazda IPC (wiele instancji) |
+
+## Licencja
+
+[MIT](LICENSE)
