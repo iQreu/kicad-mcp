@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+mcp-exports/
+*.mcp-backup-*
+*.kicad_pcb-bak
+*.kicad_sch-bak
