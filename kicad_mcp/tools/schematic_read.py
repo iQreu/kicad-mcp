@@ -26,12 +26,25 @@ def _resolve_sch(sch_path: str) -> Path:
     return p
 
 
+_netlist_cache: dict[str, tuple[float, ET.Element]] = {}
+
+
 def _netlist_xml(sch: Path) -> ET.Element:
+    """Export (or reuse a cached) XML netlist; cache key is the file mtime."""
+    key = str(sch.resolve()).lower()
+    mtime = sch.stat().st_mtime
+    cached = _netlist_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
     out = Path(tempfile.mkdtemp(prefix="kicad_mcp_")) / f"{sch.stem}.xml"
     cli.run_cli(
         ["sch", "export", "netlist", "--format", "kicadxml", "--output", str(out), str(sch)]
     )
-    return ET.parse(out).getroot()
+    root = ET.parse(out).getroot()
+    if len(_netlist_cache) > 8:
+        _netlist_cache.clear()
+    _netlist_cache[key] = (mtime, root)
+    return root
 
 
 @mcp.tool()

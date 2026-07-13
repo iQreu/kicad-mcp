@@ -10,6 +10,8 @@ from kicad_mcp import config
 from kicad_mcp.app import mcp
 from kicad_mcp.backends import cli, ipc
 
+_cli_version: str | None = None
+
 
 @mcp.tool()
 def kicad_status() -> dict:
@@ -22,10 +24,13 @@ def kicad_status() -> dict:
         "api_enabled_in_settings": ipc._api_enabled_in_settings(),
         "ipc_connected": False,
     }
-    try:
-        result["kicad_cli_version"] = cli.run_cli(["version"]).strip()
-    except ToolError as exc:
-        result["kicad_cli_version"] = f"error: {exc}"
+    global _cli_version
+    if _cli_version is None:
+        try:
+            _cli_version = cli.run_cli(["version"]).strip()
+        except ToolError as exc:
+            _cli_version = f"error: {exc}"
+    result["kicad_cli_version"] = _cli_version
 
     kicad = ipc.try_connect()
     if kicad is not None:

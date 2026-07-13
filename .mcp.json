@@ -4,7 +4,7 @@
       "command": "C:\\KiCAD_MCP\\.venv\\Scripts\\python.exe",
       "args": ["C:\\KiCAD_MCP\\server.py"],
       "env": {
-        "KICAD_MCP_ENABLE_SCH_EDIT": "0"
+        "KICAD_MCP_ENABLE_SCH_EDIT": "1"
       }
     }
   }

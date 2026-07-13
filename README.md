@@ -43,15 +43,16 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 }
 ```
 
-## Narzędzia (36)
+## Narzędzia (39)
 
 **Status / cykl życia:** `kicad_status`, `launch_kicad`
 
 **Odczyt płytki (IPC, żywy edytor):** `board_info`, `list_footprints`, `list_nets`,
 `list_tracks`, `list_vias`, `list_zones`, `get_selection`
 
-**Edycja płytki (IPC, każda zmiana = 1 krok undo):** `place_footprint`, `move_footprint`,
-`remove_footprint`, `add_track`, `add_via`, `remove_items`, `refill_zones`, `save_board`,
+**Edycja płytki (IPC, każda zmiana = 1 krok undo):** `place_footprints` (wsadowe),
+`add_tracks` (wsadowe), `place_footprint`, `move_footprint`, `remove_footprint`,
+`add_track`, `add_via`, `remove_items`, `refill_zones`, `save_board`,
 `select_items`, `clear_selection`
 
 **Kontrole i eksporty (headless, na plikach):** `run_drc`, `export_gerbers`, `export_step`,
@@ -60,8 +61,17 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 **Schematy — odczyt (headless):** `list_schematic_components`, `list_schematic_nets`,
 `run_erc`, `export_bom`, `export_schematic_pdf`, `sch_statistics`
 
-**Schematy — edycja (opt-in):** `sch_edit_status`, `sch_create_schematic`,
-`sch_add_component`, `sch_add_wire`, `sch_connect_pins`, `sch_add_label`
+**Schematy — edycja (opt-in):** `sch_apply_edits` (wsadowe — cały obwód w jednym
+wywołaniu), `sch_edit_status`, `sch_create_schematic`, `sch_add_component`,
+`sch_add_wire`, `sch_connect_pins`, `sch_add_label`
+
+## Wydajność — używaj narzędzi wsadowych
+
+Każde wywołanie narzędzia to pełna runda przez model (kilkanaście sekund i więcej).
+Budowanie schematu po jednym symbolu na wywołanie zajmuje godziny; **`sch_apply_edits`
+wstawia cały obwód (symbole + połączenia pinów + etykiety) w jednym wywołaniu w ~2 s**.
+Analogicznie na PCB: `place_footprints` i `add_tracks` zamiast pętli pojedynczych wywołań.
+Operacje wsadowe są atomowe: błąd w dowolnym elemencie = plik/płytka bez zmian.
 
 ## Konwencje
 

@@ -189,6 +189,82 @@ def sch_add_label(sch_path: str, text: str, x_mm: float, y_mm: float) -> dict:
 
 
 @mcp.tool()
+def sch_apply_edits(
+    sch_path: str,
+    components: list[dict] | None = None,
+    pin_connections: list[dict] | None = None,
+    wires: list[dict] | None = None,
+    labels: list[dict] | None = None,
+    create_if_missing: bool = False,
+) -> dict:
+    """Apply a whole batch of schematic edits in ONE call (one file load, one
+    save) - strongly preferred over calling sch_add_component etc. in a loop.
+
+    components: [{lib_id, x_mm, y_mm, reference?, value?, rotation_deg?, footprint?}]
+    pin_connections: [{ref1, pin1, ref2, pin2}]  (wires between component pins)
+    wires: [{points_mm: [[x, y], ...]}]          (free-routed polylines)
+    labels: [{text, x_mm, y_mm}]
+
+    Operations apply in the order above. If any operation fails, nothing is
+    saved and the file on disk stays untouched."""
+    _require_enabled()
+    p, ksa = _load(sch_path, must_exist=not create_if_missing)
+    backup = _backup(p)
+    if p.exists():
+        sch = ksa.load_schematic(str(p))
+    else:
+        sch = ksa.create_schematic(p.stem)
+    done = {"components": [], "pin_connections": 0, "wire_segments": 0, "labels": 0}
+    for i, c in enumerate(components or []):
+        try:
+            comp = sch.components.add(
+                lib_id=c["lib_id"],
+                reference=c.get("reference"),
+                value=c.get("value", ""),
+                position=(c["x_mm"], c["y_mm"]),
+                rotation=c.get("rotation_deg", 0.0),
+                footprint=c.get("footprint"),
+            )
+            done["components"].append(getattr(comp, "reference", c.get("reference")))
+        except Exception as exc:
+            raise ToolError(
+                f"components[{i}] ({c.get('lib_id')}) failed: {exc}. "
+                "Nothing was saved; the file is unchanged."
+            ) from exc
+    for i, pc in enumerate(pin_connections or []):
+        wire_id = sch.connect_pins_with_wire(
+            pc["ref1"], str(pc["pin1"]), pc["ref2"], str(pc["pin2"])
+        )
+        if not wire_id:
+            raise ToolError(
+                f"pin_connections[{i}] ({pc}) failed - check references and pin "
+                "numbers. Nothing was saved; the file is unchanged."
+            )
+        done["pin_connections"] += 1
+    for i, w in enumerate(wires or []):
+        pts = w["points_mm"]
+        if len(pts) < 2:
+            raise ToolError(f"wires[{i}]: needs at least 2 points. Nothing was saved.")
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            sch.add_wire((x1, y1), (x2, y2))
+            done["wire_segments"] += 1
+    for lb in labels or []:
+        sch.add_label(lb["text"], position=(lb["x_mm"], lb["y_mm"]))
+        done["labels"] += 1
+    if p.exists():
+        _save_or_explain(sch, p)
+    else:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        sch.save_as(p)
+    return {
+        "schematic": str(p),
+        "applied": done,
+        "backup_file": backup,
+        "note": "Reopen the schematic in eeschema to see the changes.",
+    }
+
+
+@mcp.tool()
 def sch_statistics(sch_path: str) -> dict:
     """Read-only summary of a schematic file via kicad-sch-api (component,
     wire and label counts). Works without the edit opt-in."""

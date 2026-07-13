@@ -71,6 +71,7 @@ def place_footprint(
         )
     fp = created[0]
     return {
+        "board": board.name,
         "created": True,
         "id": kiid_str(fp),
         "reference": fp.reference_field.text.value,
@@ -99,6 +100,7 @@ def move_footprint(
     with ipc.board_commit(board, f"MCP: move {reference}"):
         board.update_items(fp)
     return {
+        "board": board.name,
         "reference": reference,
         "position_mm": {"x_mm": new_x, "y_mm": new_y},
         "rotation_deg": rotation_deg if rotation_deg is not None else angle_deg(fp.orientation),
@@ -112,7 +114,7 @@ def remove_footprint(reference: str) -> dict:
     fp = _find_footprint(board, reference)
     with ipc.board_commit(board, f"MCP: remove {reference}"):
         board.remove_items(fp)
-    return {"removed": reference}
+    return {"board": board.name, "removed": reference}
 
 
 @mcp.tool()
@@ -143,6 +145,7 @@ def add_track(
     with ipc.board_commit(board, "MCP: add track"):
         created = board.create_items(segments)
     return {
+        "board": board.name,
         "created_segments": len(created),
         "ids": [kiid_str(t) for t in created],
         "layer": layer,
@@ -170,11 +173,88 @@ def add_via(
     with ipc.board_commit(board, "MCP: add via"):
         created = board.create_items(via)
     return {
+        "board": board.name,
         "created": bool(created),
         "id": kiid_str(created[0]) if created else None,
         "position_mm": {"x_mm": x_mm, "y_mm": y_mm},
         "net": net_name,
     }
+
+
+@mcp.tool()
+def place_footprints(items: list[dict]) -> dict:
+    """Place MANY footprints in one call and one undo step - preferred over
+    calling place_footprint in a loop.
+
+    items: [{library_id, x_mm, y_mm, reference?, value?, rotation_deg?, layer?}]
+    library_id format: 'LibraryNickname:FootprintName'."""
+    if not items:
+        raise ToolError("items is empty.")
+    board = ipc.get_board()
+    instances = []
+    for i, it in enumerate(items):
+        lib_id = it.get("library_id", "")
+        if ":" not in lib_id:
+            raise ToolError(
+                f"items[{i}]: library_id must be 'LibraryNickname:FootprintName', got '{lib_id}'."
+            )
+        nickname, entry = lib_id.split(":", 1)
+        fpi = FootprintInstance()
+        fpi.proto.definition.id.library_nickname = nickname
+        fpi.proto.definition.id.entry_name = entry
+        fpi.position = vec_mm(it["x_mm"], it["y_mm"])
+        fpi.orientation = Angle.from_degrees(it.get("rotation_deg", 0.0))
+        fpi.layer = layer_to_enum(it.get("layer", "F.Cu"))
+        if it.get("reference"):
+            fpi.reference_field.text.value = it["reference"]
+        if it.get("value"):
+            fpi.value_field.text.value = it["value"]
+        instances.append(fpi)
+    with ipc.board_commit(board, f"MCP: place {len(instances)} footprints"):
+        created = board.create_items(instances)
+    return {
+        "board": board.name,
+        "requested": len(items),
+        "created": len(created),
+        "references": [fp.reference_field.text.value for fp in created],
+    }
+
+
+@mcp.tool()
+def add_tracks(tracks: list[dict]) -> dict:
+    """Add MANY track polylines (and optional vias) in one call and one undo
+    step - preferred over calling add_track in a loop.
+
+    tracks: [{points_mm: [[x, y], ...], width_mm?, layer?, net_name?}]"""
+    if not tracks:
+        raise ToolError("tracks is empty.")
+    board = ipc.get_board()
+    nets = {n.name: n for n in board.get_nets()}
+    segments = []
+    for i, tr in enumerate(tracks):
+        pts = tr.get("points_mm", [])
+        if len(pts) < 2:
+            raise ToolError(f"tracks[{i}]: points_mm needs at least 2 points.")
+        net_name = tr.get("net_name")
+        if net_name and net_name not in nets:
+            raise ToolError(
+                f"tracks[{i}]: net '{net_name}' not found. Known nets include: "
+                f"{sorted(nets)[:40]}"
+            )
+        layer_enum = layer_to_enum(tr.get("layer", "F.Cu"))
+        width = from_mm(tr.get("width_mm", 0.25))
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            t = Track()
+            t.start = vec_mm(x1, y1)
+            t.end = vec_mm(x2, y2)
+            t.width = width
+            t.layer = layer_enum
+            if net_name:
+                t.net = nets[net_name]
+            segments.append(t)
+    with ipc.board_commit(board, f"MCP: add {len(segments)} track segments"):
+        created = board.create_items(segments)
+    return {"board": board.name, "polylines": len(tracks), "created_segments": len(created)}
 
 
 @mcp.tool()
@@ -189,7 +269,7 @@ def remove_items(ids: list[str]) -> dict:
         raise ToolError(f"No board items found for ids: {ids}")
     with ipc.board_commit(board, "MCP: remove items"):
         board.remove_items(found)
-    return {"requested": len(ids), "removed": len(found)}
+    return {"board": board.name, "requested": len(ids), "removed": len(found)}
 
 
 @mcp.tool()
@@ -198,7 +278,7 @@ def refill_zones() -> dict:
     footprints so zone fills are current)."""
     board = ipc.get_board()
     board.refill_zones()
-    return {"refilled": True, "zones": len(board.get_zones())}
+    return {"board": board.name, "refilled": True, "zones": len(board.get_zones())}
 
 
 @mcp.tool()
