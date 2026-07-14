@@ -43,16 +43,21 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 }
 ```
 
-## Narzędzia (39)
+## Narzędzia (46)
 
-**Status / cykl życia:** `kicad_status`, `launch_kicad`
+**Status / cykl życia:** `kicad_status`, `launch_kicad`, `create_project`
+
+**Biblioteki (odkrywanie lib_id):** `search_symbols`, `search_footprints`,
+`get_symbol_details` (opis, datasheet i **lista pinów** — sprawdź przed łączeniem)
 
 **Odczyt płytki (IPC, żywy edytor):** `board_info`, `list_footprints`, `list_nets`,
-`list_tracks`, `list_vias`, `list_zones`, `get_selection`
+`list_tracks`, `list_vias`, `list_zones`, `get_footprint_pads` (pozycje i sieci padów
+— podstawa routingu), `get_selection`
 
 **Edycja płytki (IPC, każda zmiana = 1 krok undo):** `place_footprints` (wsadowe),
 `add_tracks` (wsadowe), `place_footprint`, `move_footprint`, `remove_footprint`,
-`add_track`, `add_via`, `remove_items`, `refill_zones`, `save_board`,
+`add_track`, `add_via`, `add_copper_zone` (strefa miedzi z refillem),
+`draw_board_outline` (Edge.Cuts), `remove_items`, `refill_zones`, `save_board`,
 `select_items`, `clear_selection`
 
 **Kontrole i eksporty (headless, na plikach):** `run_drc`, `export_gerbers`, `export_step`,
@@ -89,7 +94,19 @@ Operacje wsadowe są atomowe: błąd w dowolnym elemencie = plik/płytka bez zmi
 - IPC API wymaga **działającego GUI** edytora PCB (headless `kicad-cli api-server` dopiero w KiCad 11).
 - Brak IPC API dla schematów (stąd edycja plikowa jako opcja eksperymentalna; API w KiCad 11).
 - Gdy KiCad ma otwarty dialog modalny, wywołania IPC timeoutują — zamknij dialog i ponów.
-- Przy kilku instancjach KiCada ustaw `KICAD_API_SOCKET` (nazwa gniazda zawiera wtedy PID).
+- Przy kilku instancjach KiCada ustaw `KICAD_API_SOCKET` (nazwa gniazda zawiera wtedy PID);
+  `launch_kicad` sam celuje w instancję z żądaną płytką, a wyniki narzędzi mutujących
+  zawierają pole `board` z nazwą zmienionej płytki.
+- Odpowiedzi „KiCad is busy" (np. w trakcie refillu stref) są automatycznie ponawiane
+  z backoffem — narzędzia nie zwracają ulotnych błędów zajętości.
+
+## Roadmapa (KiCad 11)
+
+- `Board.import_netlist` (synchronizacja schemat→PCB, odpowiednik F8) — jest w gałęzi dev
+  kipy / KiCad 11; w KiCad 10 brak tej ścieżki przez IPC.
+- Tryb headless `kicad-cli api-server` — zniesie wymóg działającego GUI.
+- Autorouting Freerouting (eksport DSN → JAR → import SES) — w KiCad 10 import SES
+  wymaga kroku ręcznego w GUI.
 
 ## Zmienne środowiskowe
 

@@ -4,8 +4,9 @@ Every mutation is wrapped in a commit so it lands as a single undo step in
 the KiCad GUI. Changes are NOT saved to disk until save_board is called.
 """
 
-from kipy.board_types import FootprintInstance, Track, Via
-from kipy.geometry import Angle
+from kipy.board_types import BoardRectangle, FootprintInstance, Track, Via, Zone
+from kipy.geometry import Angle, PolygonWithHoles, PolyLine, PolyLineNode
+from kipy.proto.board.board_types_pb2 import ZoneType
 from kipy.proto.common.types.base_types_pb2 import KIID
 from kipy.util.units import from_mm
 from mcp.server.fastmcp.exceptions import ToolError
@@ -270,6 +271,83 @@ def remove_items(ids: list[str]) -> dict:
     with ipc.board_commit(board, "MCP: remove items"):
         board.remove_items(found)
     return {"board": board.name, "requested": len(ids), "removed": len(found)}
+
+
+@mcp.tool()
+def add_copper_zone(
+    points_mm: list[list[float]],
+    layer: str = "F.Cu",
+    net_name: str | None = None,
+    priority: int = 0,
+    min_thickness_mm: float = 0.25,
+    refill: bool = True,
+) -> dict:
+    """Add a copper zone (pour) with a polygon outline of [x, y] points (mm)
+    on one copper layer, usually assigned to a net like GND. Refills zones
+    afterwards by default."""
+    if len(points_mm) < 3:
+        raise ToolError("A zone outline needs at least 3 points.")
+    board = ipc.get_board()
+    outline = PolyLine()
+    for x, y in points_mm:
+        outline.append(PolyLineNode.from_point(vec_mm(x, y)))
+    outline.closed = True
+    polygon = PolygonWithHoles()
+    polygon.outline = outline
+
+    zone = Zone()
+    zone.type = ZoneType.ZT_COPPER
+    zone.layers = [layer_to_enum(layer)]
+    zone.outline = polygon
+    zone.priority = priority
+    zone.min_thickness = from_mm(min_thickness_mm)
+    if net_name:
+        zone.net = ipc.find_net(board, net_name)
+    with ipc.board_commit(board, "MCP: add copper zone"):
+        created = board.create_items(zone)
+    if refill:
+        board.refill_zones()
+    return {
+        "board": board.name,
+        "created": len(created),
+        "id": kiid_str(created[0]) if created else None,
+        "layer": layer,
+        "net": net_name,
+        "refilled": refill,
+    }
+
+
+@mcp.tool()
+def draw_board_outline(
+    x_mm: float,
+    y_mm: float,
+    width_mm: float,
+    height_mm: float,
+    replace_existing: bool = False,
+) -> dict:
+    """Draw a rectangular board outline on Edge.Cuts (top-left corner at
+    x/y, size width x height, all mm). replace_existing removes previous
+    Edge.Cuts graphics first."""
+    board = ipc.get_board()
+    edge = layer_to_enum("Edge.Cuts")
+    removed = 0
+    with ipc.board_commit(board, "MCP: board outline"):
+        if replace_existing:
+            old = [s for s in board.get_shapes() if s.layer == edge]
+            if old:
+                board.remove_items(old)
+                removed = len(old)
+        rect = BoardRectangle()
+        rect.top_left = vec_mm(x_mm, y_mm)
+        rect.bottom_right = vec_mm(x_mm + width_mm, y_mm + height_mm)
+        rect.layer = edge
+        created = board.create_items(rect)
+    return {
+        "board": board.name,
+        "created": len(created),
+        "removed_previous": removed,
+        "outline_mm": {"x": x_mm, "y": y_mm, "width": width_mm, "height": height_mm},
+    }
 
 
 @mcp.tool()

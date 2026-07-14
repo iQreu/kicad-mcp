@@ -1,6 +1,7 @@
 ﻿"""Read-only tools for the board open in the live PCB editor (IPC API)."""
 
 from kipy.proto.board.board_commands_pb2 import BoardOriginType
+from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp.app import mcp
 from kicad_mcp.backends import ipc
@@ -145,6 +146,39 @@ def list_zones() -> dict:
             }
         )
     return {"total": len(zones), "zones": items}
+
+
+@mcp.tool()
+def get_footprint_pads(reference: str) -> dict:
+    """Pads of a footprint on the live board (e.g. 'U1'): pad number, net and
+    absolute board position (mm). Essential before routing tracks to pins."""
+    board = ipc.get_board()
+    fp = None
+    for candidate in board.get_footprints():
+        if candidate.reference_field.text.value == reference:
+            fp = candidate
+            break
+    if fp is None:
+        refs = sorted(f.reference_field.text.value for f in board.get_footprints())[:60]
+        raise ToolError(f"Footprint '{reference}' not found. Present: {refs}")
+    pads = []
+    for pad in fp.definition.pads:
+        # Pads of a placed footprint come back in absolute board coordinates
+        # (verified against KiCad 10.0.4).
+        pads.append(
+            {
+                "number": pad.number,
+                "net": pad.net.name if pad.net else None,
+                "position_mm": pos_to_mm(pad.position),
+            }
+        )
+    return {
+        "reference": reference,
+        "position_mm": pos_to_mm(fp.position),
+        "rotation_deg": angle_deg(fp.orientation),
+        "pad_count": len(pads),
+        "pads": pads,
+    }
 
 
 @mcp.tool()

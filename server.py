@@ -20,6 +20,8 @@ from kicad_mcp.tools import (  # noqa: E402, F401
     board_edit,
     board_read,
     export,
+    library,
+    project,
     schematic_edit,
     schematic_read,
     status,

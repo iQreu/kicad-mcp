@@ -15,6 +15,8 @@ from pathlib import Path
 
 from kipy import KiCad
 from kipy.board import Board
+from kipy.client import KiCadClient
+from kipy.errors import ApiError
 from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp import config
@@ -22,6 +24,27 @@ from kicad_mcp import config
 log = logging.getLogger(__name__)
 
 _kicad: KiCad | None = None
+
+# KiCad handles API calls on its UI thread and answers "KiCad is busy" while
+# e.g. a zone refill is still running. Retry those transparently for every
+# request instead of surfacing a flaky error to the model.
+_original_send = KiCadClient.send
+
+
+def _send_with_busy_retry(self, *args, **kwargs):
+    delay = 0.5
+    for attempt in range(6):
+        try:
+            return _original_send(self, *args, **kwargs)
+        except ApiError as exc:
+            if "busy" not in str(exc).lower() or attempt == 5:
+                raise
+            log.info("KiCad busy, retrying in %.1fs", delay)
+            time.sleep(delay)
+            delay = min(delay * 1.6, 3.0)
+
+
+KiCadClient.send = _send_with_busy_retry
 
 
 def _api_enabled_in_settings() -> bool | None:
