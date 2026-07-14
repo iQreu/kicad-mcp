@@ -6,13 +6,13 @@ from pathlib import Path
 from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp import config
-from kicad_mcp.app import mcp
+from kicad_mcp.app import EDIT, READONLY, mcp
 from kicad_mcp.backends import cli, ipc
 
 _cli_version: str | None = None
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def kicad_status() -> dict:
     """Report KiCad availability: running processes, API server state, IPC
     connection, versions and the currently open board. Call this first when
@@ -48,7 +48,7 @@ def kicad_status() -> dict:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def launch_kicad(file_path: str | None = None, wait_for_api: bool = True) -> dict:
     """Launch a KiCad editor. With a .kicad_pcb path opens the PCB editor,
     with .kicad_sch the schematic editor, with .kicad_pro (or nothing) the

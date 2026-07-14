@@ -3,12 +3,12 @@
 from kipy.proto.board.board_commands_pb2 import BoardOriginType
 from mcp.server.fastmcp.exceptions import ToolError
 
-from kicad_mcp.app import mcp
+from kicad_mcp.app import READONLY, mcp
 from kicad_mcp.backends import ipc
 from kicad_mcp.util import angle_deg, enum_to_layer, kiid_str, mm, pos_to_mm
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def board_info() -> dict:
     """Overview of the board open in the PCB editor: file, layer setup,
     item counts and title block."""
@@ -43,7 +43,7 @@ def board_info() -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_footprints(limit: int = 200) -> dict:
     """List footprints on the live board with reference, value, library id,
     position (mm), rotation and layer."""
@@ -67,7 +67,7 @@ def list_footprints(limit: int = 200) -> dict:
     return {"total": len(footprints), "returned": len(items), "footprints": items}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_nets(name_filter: str | None = None) -> dict:
     """List nets on the live board, optionally filtered by substring."""
     board = ipc.get_board()
@@ -79,7 +79,7 @@ def list_nets(name_filter: str | None = None) -> dict:
     return {"total": len(nets), "returned": len(names), "nets": sorted(names)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_tracks(net_name: str | None = None, limit: int = 300) -> dict:
     """List track segments (and arcs) on the live board: endpoints (mm),
     width, layer and net. Optionally filter by net name."""
@@ -105,7 +105,7 @@ def list_tracks(net_name: str | None = None, limit: int = 300) -> dict:
     return {"total": len(tracks), "returned": len(items), "tracks": items}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_vias(net_name: str | None = None, limit: int = 300) -> dict:
     """List vias on the live board: position (mm), drill, diameter and net."""
     board = ipc.get_board()
@@ -128,7 +128,7 @@ def list_vias(net_name: str | None = None, limit: int = 300) -> dict:
     return {"total": len(vias), "returned": len(items), "vias": items}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_zones() -> dict:
     """List zones on the live board: name, layers, net, priority, fill state."""
     board = ipc.get_board()
@@ -148,7 +148,7 @@ def list_zones() -> dict:
     return {"total": len(zones), "zones": items}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def get_footprint_pads(reference: str) -> dict:
     """Pads of a footprint on the live board (e.g. 'U1'): pad number, net and
     absolute board position (mm). Essential before routing tracks to pins."""
@@ -181,7 +181,7 @@ def get_footprint_pads(reference: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def get_selection() -> dict:
     """Describe items currently selected in the PCB editor (type and id),
     plus KiCad's own textual dump of the selection."""

@@ -1,6 +1,14 @@
-"""Shared FastMCP application instance."""
+"""Shared FastMCP application instance and common tool annotations."""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+
+# Annotation shorthands (hints for MCP clients; Claude Code batches
+# readOnlyHint=True calls in parallel).
+READONLY = ToolAnnotations(readOnlyHint=True)
+EDIT = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+EXPORT = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True)
 
 mcp = FastMCP(
     "kicad",

@@ -1,3 +1,4 @@
 mcp>=1.28,<2
 kicad-python>=0.7.1
 kicad-sch-api>=0.5.6
+resvg_py>=0.2

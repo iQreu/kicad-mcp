@@ -11,7 +11,7 @@ from pathlib import Path
 from mcp.server.fastmcp import Image
 from mcp.server.fastmcp.exceptions import ToolError
 
-from kicad_mcp.app import mcp
+from kicad_mcp.app import EXPORT, mcp
 from kicad_mcp.backends import cli, ipc
 
 
@@ -48,7 +48,7 @@ def _out_dir(board: Path, kind: str, output_dir: str | None) -> Path:
     return out
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def run_drc(board_path: str | None = None, save_first: bool = True) -> dict:
     """Run Design Rules Check on a board file (or the board open in the
     editor). Returns violation counts and details from the JSON report."""
@@ -106,7 +106,7 @@ def run_drc(board_path: str | None = None, save_first: bool = True) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def export_gerbers(
     board_path: str | None = None,
     output_dir: str | None = None,
@@ -124,7 +124,7 @@ def export_gerbers(
     return {"board": str(board), "output_dir": str(out), "files": files}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def export_step(
     board_path: str | None = None,
     output_path: str | None = None,
@@ -144,7 +144,7 @@ def export_step(
     return {"board": str(board), "step_file": str(out), "size_bytes": out.stat().st_size}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def export_pdf(
     board_path: str | None = None,
     layers: str = "F.Cu,B.Cu,F.SilkS,B.SilkS,Edge.Cuts",
@@ -164,7 +164,63 @@ def export_pdf(
     return {"board": str(board), "pdf_file": str(out), "layers": layers}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
+def export_position_file(
+    board_path: str | None = None,
+    format: str = "csv",
+    units: str = "mm",
+    side: str = "both",
+    smd_only: bool = False,
+    exclude_dnp: bool = True,
+    save_first: bool = True,
+) -> dict:
+    """Export a component placement (pick & place) file for assembly.
+    format: csv|ascii|gerber, side: front|back|both."""
+    board = _resolve_board(board_path, save_first)
+    ext = {"csv": "csv", "ascii": "pos", "gerber": "gbr"}.get(format, "csv")
+    out = _out_dir(board, "pos", None) / f"{board.stem}-pos.{ext}"
+    args = [
+        "pcb", "export", "pos",
+        "--format", format,
+        "--side", side,
+        "--output", str(out),
+    ]
+    if format in ("csv", "ascii"):
+        args += ["--units", units]
+        if smd_only:
+            args.append("--smd-only")
+    if exclude_dnp:
+        args.append("--exclude-dnp")
+    args.append(str(board))
+    cli.run_cli(args)
+    return {"board": str(board), "position_file": str(out), "format": format}
+
+
+@mcp.tool(annotations=EXPORT)
+def run_jobset(
+    project_path: str,
+    jobset_file: str | None = None,
+    stop_on_error: bool = False,
+) -> dict:
+    """Run a KiCad jobset (.kicad_jobset) - a user-defined batch of export/
+    check jobs - against a project (.kicad_pro), fully headless."""
+    proj = Path(project_path)
+    if not proj.exists():
+        raise ToolError(f"Project file not found: {proj}")
+    args = ["jobset", "run"]
+    if jobset_file:
+        js = Path(jobset_file)
+        if not js.exists():
+            raise ToolError(f"Jobset file not found: {js}")
+        args += ["--file", str(js)]
+    if stop_on_error:
+        args.append("--stop-on-error")
+    args.append(str(proj))
+    output = cli.run_cli(args, timeout=900)
+    return {"project": str(proj), "output": output[-4000:]}
+
+
+@mcp.tool(annotations=EXPORT)
 def render_board(
     board_path: str | None = None,
     side: str = "top",

@@ -43,9 +43,17 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 }
 ```
 
-## Narzędzia (46)
+## Narzędzia (54) i prompty
 
 **Status / cykl życia:** `kicad_status`, `launch_kicad`, `create_project`
+
+**Podgląd wizualny (samokontrola modelu):** `view_board` (szybki widok 2D warstw),
+`view_schematic` (PNG arkusza schematu) — kicad-cli SVG + rasteryzacja resvg
+
+**Ustawienia projektu:** `list_netclasses`, `set_netclass` (szerokości ścieżek,
+prześwity, przelotki, pary różnicowe + przypisania sieci wzorcami w .kicad_pro),
+`get_custom_drc_rules`, `set_custom_drc_rules` (reguły .kicad_dru z weryfikacją
+„kanarkiem" — KiCad po cichu ignoruje pliki z błędną składnią lub BOM)
 
 **Biblioteki (odkrywanie lib_id):** `search_symbols`, `search_footprints`,
 `get_symbol_details` (opis, datasheet i **lista pinów** — sprawdź przed łączeniem)
@@ -61,7 +69,15 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 `select_items`, `clear_selection`
 
 **Kontrole i eksporty (headless, na plikach):** `run_drc`, `export_gerbers`, `export_step`,
-`export_pdf`, `render_board` (zwraca PNG)
+`export_pdf`, `export_position_file` (pick&place dla montażu), `run_jobset`,
+`render_board` (raytracing PNG)
+
+**Prompty (w Claude Code jako slash-komendy):** `/mcp__kicad__design_review <katalog>`
+(pełny przegląd: ERC+DRC+BOM+wizualna ocena), `/mcp__kicad__fab_package <płytka>`
+(komplet plików produkcyjnych z bramką DRC)
+
+Wszystkie narzędzia mają adnotacje MCP (`readOnlyHint`/`destructiveHint`/`idempotentHint`) —
+klienci mogą np. zrównoleglać wywołania tylko-do-odczytu.
 
 **Schematy — odczyt (headless):** `list_schematic_components`, `list_schematic_nets`,
 `run_erc`, `export_bom`, `export_schematic_pdf`, `sch_statistics`
@@ -100,13 +116,16 @@ Operacje wsadowe są atomowe: błąd w dowolnym elemencie = plik/płytka bez zmi
 - Odpowiedzi „KiCad is busy" (np. w trakcie refillu stref) są automatycznie ponawiane
   z backoffem — narzędzia nie zwracają ulotnych błędów zajętości.
 
-## Roadmapa (KiCad 11)
+## Roadmapa (KiCad 11, spodziewany ~luty 2027)
 
 - `Board.import_netlist` (synchronizacja schemat→PCB, odpowiednik F8) — jest w gałęzi dev
   kipy / KiCad 11; w KiCad 10 brak tej ścieżki przez IPC.
-- Tryb headless `kicad-cli api-server` — zniesie wymóg działającego GUI.
-- Autorouting Freerouting (eksport DSN → JAR → import SES) — w KiCad 10 import SES
-  wymaga kroku ręcznego w GUI.
+- Tryb headless `kicad-cli api-server` — zniesie wymóg działającego GUI; IPC API
+  zyska też plotowanie i edytor schematów.
+- Autorouting Freerouting: w KiCad 10 headless DSN/SES istnieje wyłącznie przez
+  przestarzałe SWIG (`ExportSpecctraDSN`/`ImportSpecctraSES` — usuwane w v11,
+  brak następcy; kicad-cli nie ma eksportu Specctra nawet w gałęzi master).
+- Kreator jobsetów (.kicad_jobset to JSON — `run_jobset` już je uruchamia).
 
 ## Zmienne środowiskowe
 

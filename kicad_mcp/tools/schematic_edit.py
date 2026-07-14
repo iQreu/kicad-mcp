@@ -19,7 +19,7 @@ from pathlib import Path
 from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp import config
-from kicad_mcp.app import mcp
+from kicad_mcp.app import EDIT, READONLY, mcp
 from kicad_mcp.backends import cli
 
 _backed_up: set[str] = set()
@@ -96,7 +96,7 @@ def _backup(p: Path) -> str | None:
     return str(backup)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def sch_edit_status() -> dict:
     """Report whether experimental schematic editing is enabled and how to
     enable it."""
@@ -111,7 +111,7 @@ def sch_edit_status() -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_create_schematic(sch_path: str, title: str | None = None) -> dict:
     """Create a new empty .kicad_sch file (fails if it already exists)."""
     _require_enabled()
@@ -125,7 +125,7 @@ def sch_create_schematic(sch_path: str, title: str | None = None) -> dict:
     return {"created": str(p)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_add_component(
     sch_path: str,
     lib_id: str,
@@ -160,7 +160,7 @@ def sch_add_component(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_add_wire(sch_path: str, points_mm: list[list[float]]) -> dict:
     """Add wire segments along a polyline of [x, y] sheet coordinates (mm)."""
     _require_enabled()
@@ -176,7 +176,7 @@ def sch_add_wire(sch_path: str, points_mm: list[list[float]]) -> dict:
     return {"added_segments": len(ids), "backup_file": backup}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_connect_pins(
     sch_path: str, ref1: str, pin1: str, ref2: str, pin2: str
 ) -> dict:
@@ -195,7 +195,7 @@ def sch_connect_pins(
     return {"connected": f"{ref1}.{pin1} -> {ref2}.{pin2}", "backup_file": backup}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_add_label(sch_path: str, text: str, x_mm: float, y_mm: float) -> dict:
     """Add a local net label at the given sheet position (mm)."""
     _require_enabled()
@@ -207,7 +207,7 @@ def sch_add_label(sch_path: str, text: str, x_mm: float, y_mm: float) -> dict:
     return {"added_label": text, "backup_file": backup}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def sch_apply_edits(
     sch_path: str,
     components: list[dict] | None = None,
@@ -279,7 +279,7 @@ def sch_apply_edits(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def sch_statistics(sch_path: str) -> dict:
     """Read-only summary of a schematic file via kicad-sch-api (component,
     wire and label counts). Works without the edit opt-in."""

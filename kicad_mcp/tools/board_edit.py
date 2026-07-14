@@ -11,7 +11,7 @@ from kipy.proto.common.types.base_types_pb2 import KIID
 from kipy.util.units import from_mm
 from mcp.server.fastmcp.exceptions import ToolError
 
-from kicad_mcp.app import mcp
+from kicad_mcp.app import DESTRUCTIVE, EDIT, mcp
 from kicad_mcp.backends import ipc
 from kicad_mcp.util import (
     angle_deg,
@@ -31,7 +31,7 @@ def _find_footprint(board, reference: str):
     raise ToolError(f"Footprint '{reference}' not found. Present: {refs}")
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def place_footprint(
     library_id: str,
     x_mm: float,
@@ -81,7 +81,7 @@ def place_footprint(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def move_footprint(
     reference: str,
     x_mm: float | None = None,
@@ -108,7 +108,7 @@ def move_footprint(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 def remove_footprint(reference: str) -> dict:
     """Delete a footprint from the live board by reference."""
     board = ipc.get_board()
@@ -118,7 +118,7 @@ def remove_footprint(reference: str) -> dict:
     return {"board": board.name, "removed": reference}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def add_track(
     points_mm: list[list[float]],
     width_mm: float = 0.25,
@@ -155,7 +155,7 @@ def add_track(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def add_via(
     x_mm: float,
     y_mm: float,
@@ -182,7 +182,7 @@ def add_via(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def place_footprints(items: list[dict]) -> dict:
     """Place MANY footprints in one call and one undo step - preferred over
     calling place_footprint in a loop.
@@ -221,7 +221,7 @@ def place_footprints(items: list[dict]) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def add_tracks(tracks: list[dict]) -> dict:
     """Add MANY track polylines (and optional vias) in one call and one undo
     step - preferred over calling add_track in a loop.
@@ -258,7 +258,7 @@ def add_tracks(tracks: list[dict]) -> dict:
     return {"board": board.name, "polylines": len(tracks), "created_segments": len(created)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 def remove_items(ids: list[str]) -> dict:
     """Delete arbitrary board items by their KIID strings (as returned by the
     list_* tools)."""
@@ -273,7 +273,7 @@ def remove_items(ids: list[str]) -> dict:
     return {"board": board.name, "requested": len(ids), "removed": len(found)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def add_copper_zone(
     points_mm: list[list[float]],
     layer: str = "F.Cu",
@@ -317,7 +317,7 @@ def add_copper_zone(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def draw_board_outline(
     x_mm: float,
     y_mm: float,
@@ -350,7 +350,7 @@ def draw_board_outline(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def refill_zones() -> dict:
     """Refill all copper zones on the live board (run after moving tracks or
     footprints so zone fills are current)."""
@@ -359,7 +359,7 @@ def refill_zones() -> dict:
     return {"board": board.name, "refilled": True, "zones": len(board.get_zones())}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def save_board() -> dict:
     """Save the live board to disk."""
     board = ipc.get_board()
@@ -368,7 +368,7 @@ def save_board() -> dict:
     return {"saved": True, "path": str(path) if path else board.name}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def select_items(ids: list[str], clear_first: bool = True) -> dict:
     """Select board items by KIID in the PCB editor (highlights them for the
     user). clear_first replaces the current selection."""
@@ -382,7 +382,7 @@ def select_items(ids: list[str], clear_first: bool = True) -> dict:
     return {"selected": len(items)}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EDIT)
 def clear_selection() -> dict:
     """Clear the selection in the PCB editor."""
     board = ipc.get_board()

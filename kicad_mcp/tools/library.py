@@ -14,7 +14,7 @@ from pathlib import Path
 from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp import config
-from kicad_mcp.app import mcp
+from kicad_mcp.app import READONLY, mcp
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def _build_footprint_index() -> list[str]:
     return index
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def search_symbols(query: str, limit: int = 20) -> dict:
     """Search installed schematic symbol libraries by name/description
     (e.g. 'esp32', 'op amp single', 'usb-c connector'). Returns valid lib_ids
@@ -119,7 +119,7 @@ def search_symbols(query: str, limit: int = 20) -> dict:
     return {"query": query, "returned": len(hits), "symbols": hits}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def search_footprints(query: str, limit: int = 20) -> dict:
     """Search installed footprint libraries by name (e.g. '0603', 'SOIC-8',
     'ESP32 WROOM'). Returns valid library_ids for place_footprint(s) and the
@@ -137,7 +137,7 @@ def search_footprints(query: str, limit: int = 20) -> dict:
     return {"query": query, "returned": len(hits), "footprints": hits}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def get_symbol_details(lib_id: str) -> dict:
     """Full details of one library symbol: description, datasheet, reference
     prefix and the PIN LIST (number, name, type). Check pins here before

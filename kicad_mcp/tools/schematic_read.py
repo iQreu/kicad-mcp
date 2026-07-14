@@ -13,7 +13,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp.exceptions import ToolError
 
-from kicad_mcp.app import mcp
+from kicad_mcp.app import EXPORT, READONLY, mcp
 from kicad_mcp.backends import cli
 
 
@@ -47,7 +47,7 @@ def _netlist_xml(sch: Path) -> ET.Element:
     return root
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_schematic_components(sch_path: str) -> dict:
     """List components of a schematic (all hierarchy sheets): reference,
     value, footprint, library symbol and sheet."""
@@ -71,7 +71,7 @@ def list_schematic_components(sch_path: str) -> dict:
     return {"schematic": str(sch), "count": len(comps), "components": comps}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READONLY)
 def list_schematic_nets(sch_path: str, name_filter: str | None = None, limit: int = 200) -> dict:
     """List nets of a schematic with their connected pins (reference + pin
     number), from the exported netlist."""
@@ -92,7 +92,7 @@ def list_schematic_nets(sch_path: str, name_filter: str | None = None, limit: in
     return {"schematic": str(sch), "returned": len(nets), "nets": nets}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def run_erc(sch_path: str) -> dict:
     """Run Electrical Rules Check on a schematic; returns violation counts
     and details from the JSON report."""
@@ -127,7 +127,7 @@ def run_erc(sch_path: str) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def export_bom(sch_path: str, output_path: str | None = None) -> dict:
     """Export a BOM (CSV, grouped by value+footprint) and return its rows."""
     sch = _resolve_sch(sch_path)
@@ -156,7 +156,7 @@ def export_bom(sch_path: str, output_path: str | None = None) -> dict:
     return {"schematic": str(sch), "bom_file": str(out), "line_count": len(rows), "lines": rows[:300]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=EXPORT)
 def export_schematic_pdf(sch_path: str, output_path: str | None = None) -> dict:
     """Plot the schematic (all sheets) to a PDF."""
     sch = _resolve_sch(sch_path)

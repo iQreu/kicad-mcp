@@ -19,9 +19,12 @@ from kicad_mcp.app import mcp  # noqa: E402
 from kicad_mcp.tools import (  # noqa: E402, F401
     board_edit,
     board_read,
+    drc_rules,
     export,
     library,
+    preview,
     project,
+    prompts,
     schematic_edit,
     schematic_read,
     status,
