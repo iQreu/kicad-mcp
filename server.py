@@ -12,6 +12,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s: %(message)s",
 )
+# kicad-sch-api floods INFO with hundreds of per-library and per-pin lines
+# on every cache init; keep only its warnings in the client-visible log.
+logging.getLogger("kicad_sch_api").setLevel(logging.WARNING)
+logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.WARNING)
 
 from kicad_mcp.app import mcp  # noqa: E402
 
