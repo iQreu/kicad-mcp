@@ -85,6 +85,53 @@ def _finalize_save(sch, p: Path, new_file: bool = False):
         ) from exc
 
 
+def _explain_symbol_error(exc: Exception, lib_id: str) -> ToolError:
+    """Turn a missing-symbol failure into an error with concrete fixes."""
+    message = str(exc)
+    if "not found" in message.lower():
+        from kicad_mcp.tools.library import suggest_lib_ids
+
+        suggestions = suggest_lib_ids(lib_id)
+        hint = (
+            f" Closest existing symbols: {suggestions}."
+            if suggestions
+            else " Use search_symbols to find the right lib_id."
+        )
+        return ToolError(
+            f"Symbol '{lib_id}' does not exist in the installed libraries "
+            f"(KiCad 10 renamed several v9 symbols).{hint}"
+        )
+    return ToolError(message)
+
+
+def _pin_failure_message(sch, ref1: str, pin1: str, ref2: str, pin2: str) -> str:
+    """Failure text for a pin connection, listing the pins that DO exist."""
+    detail = []
+    for ref in (ref1, ref2):
+        try:
+            numbers = [n for n, _ in sch.list_component_pins(ref)]
+            detail.append(f"{ref} has pins: {sorted(numbers, key=str)[:40]}")
+        except Exception:
+            detail.append(f"{ref}: reference not found in schematic")
+    return (
+        f"Could not connect {ref1}.{pin1} to {ref2}.{pin2}. "
+        + " | ".join(detail)
+        + ". Use sch_list_component_pins or get_symbol_details to verify pins."
+    )
+
+
+def _component_pins(sch, reference: str) -> list[dict]:
+    pins = []
+    for number, pos in sch.list_component_pins(reference):
+        pins.append(
+            {
+                "number": number,
+                "position_mm": {"x_mm": getattr(pos, "x", None), "y_mm": getattr(pos, "y", None)},
+            }
+        )
+    return pins
+
+
 def _backup(p: Path) -> str | None:
     key = str(p.resolve()).lower()
     if key in _backed_up or not p.exists():
@@ -142,14 +189,17 @@ def sch_add_component(
     p, ksa = _load(sch_path)
     backup = _backup(p)
     sch = ksa.load_schematic(str(p))
-    comp = sch.components.add(
-        lib_id=lib_id,
-        reference=reference,
-        value=value,
-        position=(x_mm, y_mm),
-        rotation=rotation_deg,
-        footprint=footprint,
-    )
+    try:
+        comp = sch.components.add(
+            lib_id=lib_id,
+            reference=reference,
+            value=value,
+            position=(x_mm, y_mm),
+            rotation=rotation_deg,
+            footprint=footprint,
+        )
+    except Exception as exc:
+        raise _explain_symbol_error(exc, lib_id) from exc
     _finalize_save(sch, p)
     return {
         "added": getattr(comp, "reference", reference),
@@ -187,10 +237,7 @@ def sch_connect_pins(
     sch = ksa.load_schematic(str(p))
     wire_id = sch.connect_pins_with_wire(ref1, pin1, ref2, pin2)
     if not wire_id:
-        raise ToolError(
-            f"Could not connect {ref1}.{pin1} to {ref2}.{pin2} - check that both "
-            "references and pin numbers exist."
-        )
+        raise ToolError(_pin_failure_message(sch, ref1, pin1, ref2, pin2))
     _finalize_save(sch, p)
     return {"connected": f"{ref1}.{pin1} -> {ref2}.{pin2}", "backup_file": backup}
 
@@ -246,9 +293,9 @@ def sch_apply_edits(
             )
             done["components"].append(getattr(comp, "reference", c.get("reference")))
         except Exception as exc:
+            reason = _explain_symbol_error(exc, c.get("lib_id", ""))
             raise ToolError(
-                f"components[{i}] ({c.get('lib_id')}) failed: {exc}. "
-                "Nothing was saved; the file is unchanged."
+                f"components[{i}]: {reason} Nothing was saved; the file is unchanged."
             ) from exc
     for i, pc in enumerate(pin_connections or []):
         wire_id = sch.connect_pins_with_wire(
@@ -256,8 +303,9 @@ def sch_apply_edits(
         )
         if not wire_id:
             raise ToolError(
-                f"pin_connections[{i}] ({pc}) failed - check references and pin "
-                "numbers. Nothing was saved; the file is unchanged."
+                f"pin_connections[{i}]: "
+                + _pin_failure_message(sch, pc["ref1"], str(pc["pin1"]), pc["ref2"], str(pc["pin2"]))
+                + " Nothing was saved; the file is unchanged."
             )
         done["pin_connections"] += 1
     for i, w in enumerate(wires or []):
@@ -277,6 +325,26 @@ def sch_apply_edits(
         "backup_file": backup,
         "note": "Reopen the schematic in eeschema to see the changes.",
     }
+
+
+@mcp.tool(annotations=READONLY)
+def sch_list_component_pins(sch_path: str, reference: str) -> dict:
+    """Pin numbers and absolute sheet positions (mm) of a component already
+    placed in a schematic (e.g. 'U1'). Check this BEFORE sch_connect_pins /
+    sch_apply_edits pin_connections. Works without the edit opt-in."""
+    p, ksa = _load(sch_path)
+    sch = ksa.load_schematic(str(p))
+    try:
+        pins = _component_pins(sch, reference)
+    except Exception:
+        pins = []
+    if not pins:
+        refs = sorted(getattr(c, "reference", "?") for c in sch.components)[:60]
+        if reference not in refs:
+            raise ToolError(
+                f"Component '{reference}' not found in {p.name}. Present: {refs}"
+            )
+    return {"reference": reference, "pin_count": len(pins), "pins": pins}
 
 
 @mcp.tool(annotations=READONLY)

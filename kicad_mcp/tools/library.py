@@ -101,6 +101,32 @@ def _build_footprint_index() -> list[str]:
     return index
 
 
+def suggest_lib_ids(lib_id: str, limit: int = 8) -> list[str]:
+    """Closest existing lib_ids for a wrong one - used to enrich errors so
+    the model can self-correct in a single retry."""
+    from difflib import SequenceMatcher
+
+    lib = (lib_id.split(":", 1)[0] if ":" in lib_id else "").lower()
+    name = (lib_id.split(":", 1)[1] if ":" in lib_id else lib_id).lower()
+    squashed = name.replace("_", "").replace("-", "").replace(".", "")
+    scored: list[tuple[float, str]] = []
+    for cand_id, _desc in _build_symbol_index():
+        cand_lib, cand = cand_id.split(":", 1)
+        cand = cand.lower()
+        cand_squashed = cand.replace("_", "").replace("-", "").replace(".", "")
+        score = SequenceMatcher(None, name, cand).ratio()
+        if cand_squashed.startswith(squashed) or squashed.startswith(cand_squashed):
+            score += 0.4
+        elif squashed in cand_squashed:
+            score += 0.25
+        if lib and cand_lib.lower() == lib:
+            # Same library as requested - very likely a renamed symbol.
+            score += 0.25
+        scored.append((score, cand_id))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [cand for score, cand in scored[:limit] if score > 0.45]
+
+
 @mcp.tool(annotations=READONLY)
 def search_symbols(query: str, limit: int = 20) -> dict:
     """Search installed schematic symbol libraries by name/description
