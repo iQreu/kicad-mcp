@@ -12,6 +12,7 @@ risk (format drift, subtle corruption), therefore:
   changes, and never edit a file that is open with unsaved GUI changes.
 """
 
+import re
 import shutil
 import time
 from pathlib import Path
@@ -72,17 +73,51 @@ def _finalize_save(sch, p: Path, new_file: bool = False):
             "legacy or project-local symbols the library cannot validate - edit "
             "such schematics in eeschema instead."
         ) from exc
-    try:
-        cli.run_cli(["sch", "upgrade", str(p)], timeout=120)
-    except ToolError as exc:
+    # kicad-sch-api leaves EMPTY (instances) blocks when editing a file that
+    # KiCad created - such symbols silently vanish from netlists and plots.
+    from kicad_mcp.schfix import fill_empty_instances
+
+    text = p.read_text(encoding="utf-8")
+    text, filled = fill_empty_instances(text)
+    if filled:
+        p.write_text(text, encoding="utf-8")
+
+    def _restore(reason: str, cause: Exception | None = None):
         if snapshot is not None:
             p.write_bytes(snapshot)
         else:
             p.unlink(missing_ok=True)
-        raise ToolError(
-            f"KiCad could not parse the file just written by kicad-sch-api "
-            f"({exc}). The previous content of {p.name} was restored."
-        ) from exc
+        raise ToolError(reason + f" The previous content of {p.name} was restored.") from cause
+
+    try:
+        cli.run_cli(["sch", "upgrade", str(p)], timeout=120)
+    except ToolError as exc:
+        _restore(f"KiCad could not parse the file just written by kicad-sch-api ({exc}).", exc)
+
+    # Total-loss guard: if the file contains real (non-power) symbols but the
+    # netlist sees none, KiCad is ignoring them - fail loudly, don't let the
+    # session keep "working" on a dead file.
+    upgraded = p.read_text(encoding="utf-8")
+    refs = re.findall(r'\(property "Reference"\s+"((?:[^"\\]|\\.)*)"', upgraded)
+    real_refs = [r for r in refs if r and not r.startswith("#")]
+    if real_refs:
+        import tempfile
+        import xml.etree.ElementTree as ET
+
+        netlist = Path(tempfile.mkdtemp(prefix="kicad_mcp_verify_")) / "v.xml"
+        try:
+            cli.run_cli(
+                ["sch", "export", "netlist", "--format", "kicadxml", "--output", str(netlist), str(p)]
+            )
+            count = len(ET.parse(netlist).getroot().findall("./components/comp"))
+        except Exception:
+            count = -1  # verification itself failed; don't block the save
+        if count == 0:
+            _restore(
+                f"Save verification failed: the file contains {len(real_refs)} "
+                "components but KiCad's netlist sees none (symbols would be "
+                "invisible in KiCad)."
+            )
 
 
 def _explain_symbol_error(exc: Exception, lib_id: str) -> ToolError:

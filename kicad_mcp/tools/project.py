@@ -43,10 +43,14 @@ def create_project(directory: str, name: str, title: str | None = None) -> dict:
     )
 
     # Minimal seed files, then let KiCad itself rewrite them in its current
-    # format (upgrade doubles as a validity check).
+    # format (upgrade doubles as a validity check). The root sheet MUST get a
+    # real uuid - with a nil uuid KiCad silently drops every symbol instance
+    # from netlists and plots.
+    import uuid as uuid_mod
+
     sch.write_text(
         '(kicad_sch (version 20250114) (generator "eeschema") '
-        '(uuid "00000000-0000-0000-0000-000000000000") (paper "A4"))\n',
+        f'(uuid "{uuid_mod.uuid4()}") (paper "A4"))\n',
         encoding="utf-8",
     )
     cli.run_cli(["sch", "upgrade", "--force", str(sch)])
