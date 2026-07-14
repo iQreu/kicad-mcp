@@ -20,7 +20,7 @@ Raport z researchu poprzedzającego projekt: [RESEARCH.md](RESEARCH.md).
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\pip install mcp kicad-python kiutils kicad-sch-api
+.venv\Scripts\pip install -r requirements.txt
 ```
 
 Rejestracja w Claude Code — plik [.mcp.json](.mcp.json) w tym katalogu robi to automatycznie
@@ -80,6 +80,9 @@ Operacje wsadowe są atomowe: błąd w dowolnym elemencie = plik/płytka bez zmi
 - Edycje płytki nie zapisują pliku — wywołaj `save_board`.
 - Edycja schematów tworzy kopię zapasową `*.mcp-backup-<timestamp>` przy pierwszej zmianie w sesji;
   po edycji plik trzeba ponownie otworzyć w eeschema (KiCad nie robi hot-reload).
+- Po każdym zapisie schematu plik jest normalizowany do bieżącego formatu KiCada
+  (`kicad-cli sch upgrade`) — pliki zawsze wychodzą w formacie zainstalowanej wersji (v10),
+  a nieudany upgrade przywraca poprzednią zawartość pliku (podwójna walidacja zapisu).
 
 ## Ograniczenia (KiCad 10)
 

@@ -1,7 +1,6 @@
 """Connection status and KiCad lifecycle tools."""
 
 import subprocess
-import time
 from pathlib import Path
 
 from mcp.server.fastmcp.exceptions import ToolError
@@ -79,17 +78,23 @@ def launch_kicad(file_path: str | None = None, wait_for_api: bool = True) -> dic
     subprocess.Popen([str(exe), *args])
 
     result = {"launched": exe.name, "file": file_path, "ipc_connected": False}
-    if wait_for_api:
-        deadline = time.monotonic() + config.LAUNCH_WAIT_SECONDS
-        while time.monotonic() < deadline:
-            if ipc.try_connect() is not None:
-                result["ipc_connected"] = True
-                break
-            time.sleep(1.5)
-        if not result["ipc_connected"]:
+    board_file = args[0] if exe is config.PCBNEW_EXE else None
+    if wait_for_api and board_file:
+        # Wait specifically for the instance that has THIS board open, so a
+        # concurrently running KiCad cannot be mistaken for the launched one.
+        kicad = ipc.connect_to_board(board_file, config.LAUNCH_WAIT_SECONDS)
+        if kicad is not None:
+            result["ipc_connected"] = True
+            result["connected_board"] = kicad.get_board().name
+        else:
             result["note"] = (
-                "KiCad was launched but the IPC API did not come up within "
-                f"{config.LAUNCH_WAIT_SECONDS}s. In KiCad 10 only the PCB editor "
-                "serves the API; check Preferences > Plugins > 'Enable KiCad API'."
+                "KiCad was launched but no IPC instance with this board showed "
+                f"up within {config.LAUNCH_WAIT_SECONDS}s. Check Preferences > "
+                "Plugins > 'Enable KiCad API'."
             )
+    elif wait_for_api:
+        result["note"] = (
+            "In KiCad 10 only the PCB editor serves the IPC API, so there is "
+            "nothing to wait for when opening a schematic or project."
+        )
     return result

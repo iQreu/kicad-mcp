@@ -9,6 +9,7 @@ import json
 import logging
 import subprocess
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -128,6 +129,26 @@ def try_connect(timeout_ms: int = 1500) -> KiCad | None:
         return connect(timeout_ms=timeout_ms)
     except ToolError:
         return None
+
+
+def connect_to_board(filename: str, timeout_s: float) -> KiCad | None:
+    """Poll all reachable KiCad instances until one has the given board file
+    open, then make it the cached connection. Guards against grabbing a
+    different instance's board when several KiCads are running."""
+    global _kicad
+    want = Path(filename).name.lower()
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        for socket_path in [None, *_candidate_sockets()]:
+            try:
+                k = KiCad(socket_path=socket_path, timeout_ms=1500)
+                if Path(k.get_board().name).name.lower() == want:
+                    _kicad = k
+                    return k
+            except Exception:
+                continue
+        time.sleep(1.5)
+    return None
 
 
 def get_board() -> Board:

@@ -20,6 +20,16 @@ def _resolve_board(board_path: str | None, save_first: bool) -> Path:
         p = Path(board_path)
         if not p.exists():
             raise ToolError(f"Board file not found: {p}")
+        if save_first:
+            # If this very board happens to be open in the editor, save it so
+            # the export matches what is on screen. Best-effort: no editor or
+            # a different board open is fine.
+            try:
+                open_path = ipc.open_board_path()
+                if open_path and open_path.resolve() == p.resolve():
+                    ipc.get_board().save()
+            except Exception:
+                pass
         return p
     path = ipc.open_board_path()
     if path is None:

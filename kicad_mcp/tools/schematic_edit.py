@@ -1,4 +1,4 @@
-﻿"""Schematic file editing (opt-in, experimental).
+"""Schematic file editing (opt-in, experimental).
 
 KiCad 10 has no official schematic-editing API, so these tools rewrite
 .kicad_sch files directly via the kicad-sch-api library. That carries real
@@ -20,6 +20,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from kicad_mcp import config
 from kicad_mcp.app import mcp
+from kicad_mcp.backends import cli
 
 _backed_up: set[str] = set()
 
@@ -44,12 +45,20 @@ def _load(sch_path: str, must_exist: bool = True):
     return p, ksa
 
 
-def _save_or_explain(sch, p: Path):
-    """Save via kicad-sch-api; translate its validation refusal into a clear
-    tool error. The library validates before writing, so on failure the file
-    on disk is untouched."""
+def _finalize_save(sch, p: Path, new_file: bool = False):
+    """Persist the schematic and normalize it to the current KiCad format.
+
+    kicad-sch-api writes the KiCad 9 dialect (version 20250114), so after
+    every save the file is rewritten by `kicad-cli sch upgrade` to the format
+    of the installed KiCad. The upgrade doubles as a parse check by KiCad
+    itself: if it fails, the previous file content is restored."""
+    snapshot = p.read_bytes() if p.exists() else None
     try:
-        sch.save()
+        if new_file:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            sch.save_as(p)
+        else:
+            sch.save()
     except Exception as exc:
         issues = ""
         try:
@@ -62,6 +71,17 @@ def _save_or_explain(sch, p: Path):
             "disk was NOT modified. This typically happens on schematics using "
             "legacy or project-local symbols the library cannot validate - edit "
             "such schematics in eeschema instead."
+        ) from exc
+    try:
+        cli.run_cli(["sch", "upgrade", str(p)], timeout=120)
+    except ToolError as exc:
+        if snapshot is not None:
+            p.write_bytes(snapshot)
+        else:
+            p.unlink(missing_ok=True)
+        raise ToolError(
+            f"KiCad could not parse the file just written by kicad-sch-api "
+            f"({exc}). The previous content of {p.name} was restored."
         ) from exc
 
 
@@ -101,8 +121,7 @@ def sch_create_schematic(sch_path: str, title: str | None = None) -> dict:
     sch = ksa.create_schematic(p.stem)
     if title:
         sch.set_title_block(title=title)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    sch.save_as(p)
+    _finalize_save(sch, p, new_file=True)
     return {"created": str(p)}
 
 
@@ -131,7 +150,7 @@ def sch_add_component(
         rotation=rotation_deg,
         footprint=footprint,
     )
-    _save_or_explain(sch, p)
+    _finalize_save(sch, p)
     return {
         "added": getattr(comp, "reference", reference),
         "lib_id": lib_id,
@@ -153,7 +172,7 @@ def sch_add_wire(sch_path: str, points_mm: list[list[float]]) -> dict:
     ids = []
     for (x1, y1), (x2, y2) in zip(points_mm, points_mm[1:]):
         ids.append(sch.add_wire((x1, y1), (x2, y2)))
-    _save_or_explain(sch, p)
+    _finalize_save(sch, p)
     return {"added_segments": len(ids), "backup_file": backup}
 
 
@@ -172,7 +191,7 @@ def sch_connect_pins(
             f"Could not connect {ref1}.{pin1} to {ref2}.{pin2} - check that both "
             "references and pin numbers exist."
         )
-    _save_or_explain(sch, p)
+    _finalize_save(sch, p)
     return {"connected": f"{ref1}.{pin1} -> {ref2}.{pin2}", "backup_file": backup}
 
 
@@ -184,7 +203,7 @@ def sch_add_label(sch_path: str, text: str, x_mm: float, y_mm: float) -> dict:
     backup = _backup(p)
     sch = ksa.load_schematic(str(p))
     sch.add_label(text, position=(x_mm, y_mm))
-    _save_or_explain(sch, p)
+    _finalize_save(sch, p)
     return {"added_label": text, "backup_file": backup}
 
 
@@ -251,11 +270,7 @@ def sch_apply_edits(
     for lb in labels or []:
         sch.add_label(lb["text"], position=(lb["x_mm"], lb["y_mm"]))
         done["labels"] += 1
-    if p.exists():
-        _save_or_explain(sch, p)
-    else:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        sch.save_as(p)
+    _finalize_save(sch, p, new_file=not p.exists())
     return {
         "schematic": str(p),
         "applied": done,
